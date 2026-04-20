@@ -36,7 +36,7 @@ export const chat = async (req: Request, res: Response) => {
         const conversation = await Conversation.findById(conversationId);
 
         if (conversation && conversation.title === "New Conversation") {
-            const newTitle = content.trim().slice(0, 20);
+            const newTitle = content.trim().slice(0, 25);
             conversation.title = newTitle || "New Conversation";
             await conversation.save();
         }

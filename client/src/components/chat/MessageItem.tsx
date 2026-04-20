@@ -8,12 +8,12 @@ const MessageItem = ({ message }: { message: Message }) => {
     <div className={`flex w-full my-3 ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={`
-          max-w-[75%] px-4 py-3 rounded-2xl text-base leading-relaxed
-          shadow-md transition-all duration-200
+          px-4 py-3 rounded-2xl text-base leading-relaxed
+          transition-all duration-200
 
           ${isUser
-            ? "bg-blue-600 text-white rounded-br-sm"
-            : "bg-neutral-900 text-neutral-100 rounded-bl-sm border border-neutral-800"
+            ? "bg-blue-600 text-white rounded-br-sm max-w-[75%] shadow-md "
+            : "bg-transparent w-full text-neutral-100 flex-1"
           }
         `}
       >

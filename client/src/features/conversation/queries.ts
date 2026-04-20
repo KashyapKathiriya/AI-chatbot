@@ -12,8 +12,10 @@ export const useCreateConversation = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: createConversation,
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["conversations"]})
+        onSuccess: (newConv) => {
+            queryClient.setQueryData(["conversations"], (old: any = []) => {
+                return [newConv, ...old]
+            })
         }
     })
 }
@@ -21,19 +23,25 @@ export const useCreateConversation = () => {
 export const useDeleteConversation = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: deleteConversation,
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["conversations"]})
-        }
-    })
-}
+        mutationFn: (id: string) => deleteConversation(id),
+        onSuccess: (_, id) => {
+            queryClient.setQueryData(["conversations"], (old: any = []) => {
+                return old.filter((c: any) => c.id !== id);
+            });
+        },
+    });
+};
 
 export const useUpdateConversationTitle = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: ({id, title,}: {id: string; title: string;}) => updateConversationTitle(id, title),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["conversations"]});
-        }
+        mutationFn: ({ id, title, }: { id: string; title: string; }) => updateConversationTitle(id, title),
+        onSuccess: (updated, variables) => {
+            queryClient.setQueryData(["conversations"], (old: any = []) => {
+                return old.map((c: any) =>
+                    c.id === variables.id ? { ...c, title: updated.title } : c
+                );
+            });
+        },
     })
 }

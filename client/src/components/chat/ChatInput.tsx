@@ -4,13 +4,20 @@ import { useConversationStore } from "../../features/conversation/store";
 
 const ChatInput = () => {
   const [input, setInput] = useState("");
-  const { mutateAsync: sendMessage, isPending} = useSendMessage();
+
+  const { mutateAsync: sendMessage, isPending } = useSendMessage();
   const { activeConversationId } = useConversationStore();
 
   const handleSend = async () => {
-    if (!input.trim() || !activeConversationId) return;
+    const trimmed = input.trim();
 
-    await sendMessage( {conversationId: activeConversationId, content: input} );
+    if (!trimmed || !activeConversationId) return;
+
+    await sendMessage({
+      conversationId: activeConversationId,
+      content: trimmed,
+    });
+
     setInput("");
   };
 
@@ -31,25 +38,25 @@ const ChatInput = () => {
           placeholder="Message..."
           rows={1}
           className="
-        flex-1 resize-none rounded-xl
-        bg-neutral-900 text-white
-        px-4 py-3 text-base
-        outline-none
-        focus:ring-2 focus:ring-blue-600
-        transition
-      "
+            flex-1 resize-none rounded-xl
+            bg-neutral-900 text-white
+            px-4 py-3 text-base
+            outline-none
+            focus:ring-2 focus:ring-blue-600
+            transition
+          "
         />
 
         <button
           onClick={handleSend}
-          disabled={isPending}
+          disabled={isPending || !activeConversationId}
           className="
-        px-4 py-3 rounded-xl
-        bg-blue-600 hover:bg-blue-500
-        disabled:opacity-50
-        transition active:scale-[0.97]
-        text-base font-medium
-      "
+            px-4 py-3 rounded-xl
+            bg-blue-600 hover:bg-blue-500
+            disabled:opacity-50
+            transition active:scale-[0.97]
+            text-base font-medium
+          "
         >
           Send
         </button>
