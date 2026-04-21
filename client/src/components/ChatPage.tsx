@@ -6,15 +6,11 @@ import { useConversationStore } from "../features/conversation/store";
 
 const ChatPage = () => {
   const { id } = useParams();
-  const { activeConversationId, setActiveConversation } =
-    useConversationStore();
-
+  const {  setActiveConversation } = useConversationStore();
   // sync URL → store
   useEffect(() => {
-    if (id && id !== activeConversationId) {
-      setActiveConversation(id);
-    }
-  }, [id, activeConversationId, setActiveConversation]);
+    setActiveConversation(id ?? null);
+  }, [id, setActiveConversation]);
 
   return (
     <div className="flex h-screen overflow-hidden">

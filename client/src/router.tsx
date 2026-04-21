@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ChatPage from "./components/ChatPage";
+import ChatHome from "./components/chat/ChatHome";
 import { SignIn, SignUp, useUser } from "@clerk/react";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -15,7 +16,7 @@ export default function Router() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Auth pages */}
+        {/* Auth */}
         <Route
           path="/sign-in"
           element={
@@ -24,7 +25,6 @@ export default function Router() {
             </div>
           }
         />
-
         <Route
           path="/sign-up"
           element={
@@ -33,8 +33,7 @@ export default function Router() {
             </div>
           }
         />
-
-        {/* Protected routes */}
+        {/* Protected app shell */}
         <Route
           path="/app"
           element={
@@ -42,15 +41,13 @@ export default function Router() {
               <ChatPage />
             </ProtectedRoute>
           }
-        />
-        <Route
-          path="/app/chat/:id"
-          element={
-            <ProtectedRoute>
-              <ChatPage />
-            </ProtectedRoute>
-          }
-        />
+        >
+          {/* default home state */}
+          <Route index element={<ChatHome />} />
+
+          {/* active chat */}
+          <Route path="chat/:id" element={<ChatPage />} />
+        </Route>
 
         {/* Redirects */}
         <Route path="/" element={<Navigate to="/app" replace />} />

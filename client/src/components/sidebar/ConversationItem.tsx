@@ -5,6 +5,8 @@ import {
   useDeleteConversation,
   useUpdateConversationTitle,
 } from "../../features/conversation/queries";
+import { useConversationStore } from "../../features/conversation/store";
+import { useNavigate } from "react-router-dom";
 
 interface Props {
   conversation: Conversation;
@@ -13,16 +15,24 @@ interface Props {
 }
 
 const ConversationItem = ({ conversation, isActive, onClick }: Props) => {
+  const navigate = useNavigate();
+  const { activeConversationId, setActiveConversation } =
+    useConversationStore();
+
   const { mutateAsync: deleteConversation } = useDeleteConversation();
-  const { mutateAsync: updateConversationTitle } =
-    useUpdateConversationTitle();
+  const { mutateAsync: updateConversationTitle } = useUpdateConversationTitle();
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(conversation.title);
 
   const handleDelete = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
+    const isActive = activeConversationId === conversation.id;
     await deleteConversation(conversation.id);
+    if (isActive) {
+      setActiveConversation(null);
+      navigate("/app");
+    }
   };
 
   const handleSave = async () => {

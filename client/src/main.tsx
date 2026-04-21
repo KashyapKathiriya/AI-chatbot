@@ -8,7 +8,7 @@ import AuthProvider from "./providers/AuthProvider";
 const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")!).render(
-  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+  <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} afterSignOutUrl="/">
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <App />
