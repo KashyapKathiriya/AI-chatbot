@@ -14,8 +14,7 @@ export const useMessages = (conversationId?: string) => {
     queryKey: ["messages", conversationId],
     queryFn: () => fetchMessage(conversationId!),
     enabled: !!conversationId,
-    select: (data) =>
-      Array.isArray(data) ? data.map(mapMessage) : [],
+    select: (data) => (Array.isArray(data) ? data.map(mapMessage) : []),
     staleTime: 10_000,
   });
 };
@@ -36,39 +35,52 @@ export const useSendMessage = () => {
         conversationId,
       ]);
 
-      const optimisticMessage: Message = {
-        id: `temp-${crypto.randomUUID()}`,
+      const tempAssistantId = `temp-ai-${crypto.randomUUID()}`;
+
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
         role: "user",
         content,
         createdAt: new Date().toISOString(),
       };
 
+      const assistantPlaceholder: Message = {
+        id: tempAssistantId,
+        role: "model",
+        content: "",
+        createdAt: new Date().toISOString(),
+      };
+
       queryClient.setQueryData<Message[]>(
         ["messages", conversationId],
-        (old = []) => [...old, optimisticMessage]
+        (old = []) => [...old, userMessage, assistantPlaceholder],
       );
 
-      return { previousMessages };
+      return {
+        previousMessages,
+        tempAssistantId,
+        conversationId,
+      };
     },
 
-    onSuccess: (data, variables) => {
+    onSuccess: (data, _vars, context) => {
+      const serverMessages = data.messages.map(mapMessage);
+
       queryClient.setQueryData<Message[]>(
-        ["messages", variables.conversationId],
-        data.messages.map(mapMessage)
+        ["messages", context.conversationId],
+        (old = []) => {
+          const filtered = old.filter((m) => m.id !== context.tempAssistantId);
+
+          return [...filtered, ...serverMessages.slice(-1)];
+        },
       );
     },
 
-    onError: (_, variables, context) => {
+    onError: (_err, variables, context) => {
       queryClient.setQueryData(
         ["messages", variables.conversationId],
-        context?.previousMessages || []
+        context?.previousMessages || [],
       );
-    },
-
-    onSettled: (_, __, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ["messages", variables.conversationId],
-      });
     },
   });
 };

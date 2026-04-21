@@ -1,29 +1,50 @@
 import type { Message } from "../../features/chat/types";
-import ReactMarkdown from "react-markdown";
+import Markdown from "./Markdown";
+import TypingIndicator from "./TypingIndicator";
 
-const MessageItem = ({ message }: { message: Message }) => {
+const Avatar = ({ role }: { role: string }) => {
+  return (
+    <div
+      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0 border border-neutral-700 ${
+        role === "user"
+          ? "bg-blue-600 text-white"
+          : "bg-neutral-800 text-neutral-200"
+      }`}
+    >
+      {role === "user" ? "U" : "AI"}
+    </div>
+  );
+};
+
+const MessageItem = ({ message, isTyping }: { message: Message; isTyping: boolean }) => {
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex w-full my-3 ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`
-          px-4 py-3 rounded-2xl text-base leading-relaxed
-          transition-all duration-200
+    <div className="w-full flex justify-center">
+      <div className="w-full max-w-screen-lg px-4 flex gap-3 py-3">
+        {!isUser && <Avatar role="model" />}
 
-          ${isUser
-            ? "bg-blue-600 text-white rounded-br-sm max-w-[75%] shadow-md "
-            : "bg-transparent w-full text-neutral-100 flex-1"
-          }
-        `}
-      >
-        {isUser ? (
-          message.content
-        ) : (
-          <div className="markdown-body">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
-          </div>
-        )}
+        <div
+          className={`flex flex-col w-full ${
+            isUser ? "items-end" : "items-start"
+          }`}
+        >
+          {isUser ? (
+            <div className="bg-blue-600 text-white border border-blue-500 rounded-2xl px-4 py-2 text-base whitespace-pre-wrap break-words max-w-[85%]">
+              {message.content}
+            </div>
+          ) : (
+            <div className="w-full text-base leading-7 text-neutral-100">
+              <Markdown content={message.content} />
+            </div>
+          )}
+
+          {!isUser && isTyping && message.content === "" && (
+            <TypingIndicator />
+          )}
+        </div>
+
+        {isUser && <Avatar role="user" />}
       </div>
     </div>
   );

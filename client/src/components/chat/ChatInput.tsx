@@ -10,15 +10,12 @@ const ChatInput = () => {
 
   const handleSend = async () => {
     const trimmed = input.trim();
-
     if (!trimmed || !activeConversationId) return;
-
     await sendMessage({
       conversationId: activeConversationId,
       content: trimmed,
     });
-    console.log("after send");
-
+    
     setInput("");
   };
 
@@ -30,7 +27,8 @@ const ChatInput = () => {
   };
 
   return (
-    <div className="p-4 bg-neutral-950 w-full max-w-screen-lg">
+    <div className="px-4 flex justify-center bg-neutral-950 w-full">
+      <div className="p-4 bg-neutral-950 w-full max-w-screen-lg">
       <div className="flex gap-2 items-end">
         <textarea
           value={input}
@@ -62,6 +60,7 @@ const ChatInput = () => {
           Send
         </button>
       </div>
+    </div>
     </div>
   );
 };
