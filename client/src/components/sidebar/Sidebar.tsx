@@ -1,18 +1,23 @@
 import { useConversationStore } from "../../features/conversation/store";
 import ConversationItem from "./ConversationItem";
 import { ChevronDown } from "lucide-react";
-import { useConversations, useCreateConversation } from "../../features/conversation/queries";
+import {
+  useConversations,
+  useCreateConversation,
+} from "../../features/conversation/queries";
+import { useNavigate } from "react-router-dom";
 
 const Sidebar = () => {
-  const { activeConversationId, setActiveConversation, } = useConversationStore();
-
+  const { activeConversationId, setActiveConversation } = useConversationStore();
+  const navigate = useNavigate();
   const { data: conversations, isLoading } = useConversations();
   const { mutateAsync: createConversation } = useCreateConversation();
   const handleNewChat = async () => {
     const newConv = await createConversation();
     setActiveConversation(newConv.id);
+    navigate(`/app/chat/${newConv.id}`)
   };
-  
+
   return (
     <div className="w-72 h-screen bg-neutral-950 text-white flex flex-col border-r border-neutral-800">
       {/* Header */}
@@ -33,7 +38,7 @@ const Sidebar = () => {
 
       {/* Conversations */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        { isLoading ? (
+        {isLoading ? (
           <div className="p-4 text-base text-neutral-400">Loading...</div>
         ) : (
           conversations.map((conv) => (
@@ -41,7 +46,10 @@ const Sidebar = () => {
               key={conv.id}
               conversation={conv}
               isActive={conv.id === activeConversationId}
-              onClick={() => setActiveConversation(conv.id)}
+              onClick={() => {
+                setActiveConversation(conv.id);
+                navigate(`/app/chat/${conv.id}`)
+              }}
             />
           ))
         )}
