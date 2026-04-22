@@ -1,6 +1,6 @@
-import type { Message } from "../../features/chat/types";
-import Markdown from "./Markdown";
-import TypingIndicator from "./TypingIndicator";
+import type { Message } from "../types";
+import Markdown from "./Markdown.tsx";
+import TypingIndicator from "./TypingIndicator.tsx";
 
 const MessageItem = ({ message }: { message: Message }) => {
   const isUser = message.role === "user";

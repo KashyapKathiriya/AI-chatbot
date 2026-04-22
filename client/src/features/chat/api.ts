@@ -1,4 +1,4 @@
-import { http } from "../../services/http";
+import { http } from "../../shared/services/http";
 import type { ApiMessage } from "./types";
 
 export const fetchMessage = async (
@@ -41,10 +41,7 @@ export const streamMessage = async (
     for (const line of lines) {
       if (!line.trim()) continue;
 
-      console.log("RAW CHUNK:", line);
       const chunk = JSON.parse(line);
-      console.log("PARSED CHUNK:", chunk);
-
 
       if (chunk.type === "token") {
         onToken(chunk.text);

@@ -1,4 +1,4 @@
-import { http } from "../../services/http";
+import { http } from "../../shared/services/http";
 import type { Conversation } from "./types";
 
 const normalizeConversation = (c: any): Conversation => {

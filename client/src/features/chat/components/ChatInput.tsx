@@ -1,15 +1,16 @@
-import { useState, useRef, useEffect } from "react";
-import { useSendMessage } from "../../features/chat/queries";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUp } from "lucide-react";
 import { useParams } from "react-router-dom";
+import { useChatStore } from "../../../app/store/chatStore";
+import { useStreaming } from "../hooks/useStreaming";
 
 const ChatInput = () => {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { mutateAsync: sendMessage, isPending } = useSendMessage();
-  const { id } = useParams();
-
+  const { id: conversationId } = useParams();
+  const { startStreaming } = useStreaming();
+  const isStreaming = useChatStore((state) => state.isStreaming);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -20,12 +21,14 @@ const ChatInput = () => {
 
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || !id || isPending) return;
+    if (!trimmed || !conversationId || isStreaming) {
+      return;
+    }
 
     setInput("");
 
-    await sendMessage({
-      conversationId: id,
+    await startStreaming({
+      conversationId,
       content: trimmed,
     });
   };
@@ -33,7 +36,7 @@ const ChatInput = () => {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
@@ -82,12 +85,8 @@ const ChatInput = () => {
 
           {/* Send Button */}
           <button
-            onClick={() => {
-              console.log("CLICKED");
-              console.log({ id });
-              handleSend();
-            }}
-            disabled={!input.trim() || isPending}
+            onClick={() => void handleSend()}
+            disabled={!input.trim() || isStreaming}
             className="
               absolute right-3 bottom-[10px]
               p-2
@@ -100,6 +99,7 @@ const ChatInput = () => {
             <ArrowUp className="w-5 h-5" />
           </button>
         </div>
+
         <p className="text-center text-neutral-500 text-xs mt-1">
           AI can make mistakes. Please double-check important information.
         </p>
