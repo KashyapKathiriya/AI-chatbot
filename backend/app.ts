@@ -1,11 +1,13 @@
 import express from 'express'
 import cors from 'cors'
+import morgan from "morgan";
 import conversationRoutes from './routes/conversation.routes.ts'
 import chatRoutes from './routes/chat.routes.ts';
 import { protect } from './middlewares/getAuth.ts'
 import { clerkMiddleware } from '@clerk/express'
 
 const app = express();
+app.use(morgan("dev"));
 
 app.use(cors({
     origin: ['http://localhost:5173'],

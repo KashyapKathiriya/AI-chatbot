@@ -1,53 +1,52 @@
 import type { Request, Response } from "express";
-import Conversation from "../models/Conversation.ts"
-import Message from "../models/Message.ts"
 import { getAuth } from "@clerk/express";
+import {
+    createConversationService,
+    getConversationsService,
+    deleteConversationService,
+    updateConversationTitleService
+} from "../services/conversation/conversation.service";
+import { getMessagesService } from "../services/conversation/message.service";
+import { normalizeParam } from "../utils/params";
 
 export const createConversation = async (req: Request, res: Response) => {
     const { userId } = getAuth(req);
-    const convo = await Conversation.create({
-        userId,
-        title: "New Conversation"
-    })
+    const convo = await createConversationService(userId);
     res.json(convo);
 }
 
 export const getConversations = async (req: Request, res: Response) => {
     const { userId } = getAuth(req);
-    const convos = await Conversation.find({ userId }).sort({ createdAt: -1 });
+    const convos = await getConversationsService(userId!);
     res.json(convos);
 }
 
 export const getMessages = async (req: Request, res: Response) => {
     const { userId } = getAuth(req);
-    const { id } = req.params;
-    const convo = await Conversation.findOne({ _id: id, userId });
-    if (!convo) {
-        return res.json({ error: "Not found" });
+    const id = normalizeParam(req.params.id);
+    const result = await getMessagesService(userId!, id);
+    if ("error" in result) {
+        return res.status(404).json(result);
     }
-    const messages = await Message.find({ conversationId: id }).sort({ createdAt: 1 });
-    res.json(messages);
+    res.json(result); 
 }
 
 export const deleteConversation = async (req: Request, res: Response) => {
     const { userId } = getAuth(req);
-    const { id } = req.params;
-    const convo = await Conversation.findByIdAndDelete({ _id: id, userId });
-    if (!convo) {
-        return res.status(404).json({ error: "Not found"})
+    const id = normalizeParam(req.params.id);
+    const result = await deleteConversationService(userId!, id);
+    if (!result) {
+        return res.status(404).json({ error: "Not found" });
     }
-    await Message.deleteMany({ conversationId: id });
     res.json({ success: true });
 }
 
 export const updateConversationTitle = async (req: Request, res: Response) => {
     try {
         const { userId } = getAuth(req);
-        const { id } = req.params;
+        const id = normalizeParam(req.params.id);
         const { title } = req.body;
-        const updated = await Conversation.findByIdAndUpdate(
-            { _id: id, userId}, { title }, { new: true }
-        );
+        const updated = await updateConversationTitleService(userId!, id, title)
         if (!updated) {
             return res.status(404).json({ error: "Not found" });
         }

@@ -38,7 +38,7 @@ const ChatInput = () => {
   };
 
   return (
-    <div className="w-full bg-[#212121] pt-2 pb-6 px-4">
+    <div className="w-full bg-[#212121] pt-4 pb-2 px-4">
       <div className="max-w-3xl mx-auto relative">
         <div
           className="
@@ -89,7 +89,7 @@ const ChatInput = () => {
             }}
             disabled={!input.trim() || isPending}
             className="
-              absolute right-3 bottom-3
+              absolute right-3 bottom-[10px]
               p-2
               bg-white text-black rounded-xl
               hover:bg-neutral-200 transition-colors
@@ -100,6 +100,9 @@ const ChatInput = () => {
             <ArrowUp className="w-5 h-5" />
           </button>
         </div>
+        <p className="text-center text-neutral-500 text-xs mt-1">
+          AI can make mistakes. Please double-check important information.
+        </p>
       </div>
     </div>
   );
