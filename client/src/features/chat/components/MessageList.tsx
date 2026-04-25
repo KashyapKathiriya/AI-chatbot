@@ -6,28 +6,46 @@ import { useMessages } from "../services/chatQueries";
 
 const MessageList = () => {
   const { id: conversationId } = useParams();
+
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const hydratedConversationRef = useRef<string | null>(null);
 
   const messages = useChatStore((state) => state.messages);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
+
   const isStreaming = useChatStore((state) => state.isStreaming);
+  const streamingId = useChatStore((state) => state.streamingId);
+  const stopRequested = useChatStore((state) => state.stopRequested);
+
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
   const setMessages = useChatStore((state) => state.setMessages);
 
-  const { data: fetchedMessages = [], isLoading } = useMessages(conversationId);
+  const { data: fetchedMessages = [], isLoading } =
+    useMessages(conversationId);
 
+  /**
+   * Set active conversation ONLY
+   */
   useEffect(() => {
+    // Prevent clearing messages if the store ID already matches the URL ID
+    if (activeConversationId === (conversationId ?? null)) {
+      return;
+    }
+
     hydratedConversationRef.current = null;
     setActiveConversation(conversationId ?? null);
-  }, [conversationId, setActiveConversation]);
+  }, [conversationId, setActiveConversation, activeConversationId]);
 
+  /**
+   * Hydration (safe against streaming race conditions)
+   */
   useEffect(() => {
     if (
       !conversationId ||
       isLoading ||
       activeConversationId !== conversationId ||
-      hydratedConversationRef.current === conversationId
+      hydratedConversationRef.current === conversationId ||
+      streamingId
     ) {
       return;
     }
@@ -39,13 +57,22 @@ const MessageList = () => {
     conversationId,
     fetchedMessages,
     isLoading,
-    isStreaming,
     setMessages,
+    streamingId,
   ]);
 
+  /**
+   * Scroll management (stop + streaming safe)
+   */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const id = requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({
+        behavior: isStreaming || stopRequested ? "auto" : "smooth",
+      });
+    });
+
+    return () => cancelAnimationFrame(id);
+  }, [messages, isStreaming, stopRequested]);
 
   if (!conversationId) {
     return (

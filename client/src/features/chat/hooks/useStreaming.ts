@@ -1,119 +1,210 @@
-import { useMemo } from "react";
+import { useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useChatStore } from "../../../app/store/chatStore";
+import { useConversationActions } from "../../conversation/services/conversationQueries";
 import { streamMessage } from "../api";
-import { usePersistMessage } from "../services/chatQueries";
-import type { Message } from "../types";
 
 type StreamPayload = {
-  conversationId: string;
-  content: string;
+    conversationId: string;
+    content: string;
+    model?: string;
 };
 
-function debounce(fn: Function, ms: number) {
-  let timeoutId: ReturnType<typeof setTimeout>;
-  return function (this: any, ...args: any[]) {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn.apply(this, args), ms);
-  };
-}
+type ActiveStream = {
+    assistantId: string;
+    rafId: number | null;
+    buffer: string;
+    stop: (() => void) | null;
+};
 
 export const useStreaming = () => {
-  const persistMutation = usePersistMessage();
+    const navigate = useNavigate();
+    const { invalidateConversations } = useConversationActions();
+    const streamsRef = useRef<Map<string, ActiveStream>>(new Map());
 
-  const debouncedSave = useMemo(
-    () =>
-      debounce(async (payload: any) => {
+    const startStreaming = async ({
+        conversationId,
+        content,
+        model,
+    }: StreamPayload) => {
+        const store = useChatStore.getState();
+
+        if (
+            (store.activeConversationId !== conversationId &&
+                conversationId !== "new") ||
+            store.isStreaming
+        ) {
+            return;
+        }
+
+        const isNew = conversationId === "new";
+
+        store.appendUserMessage(content);
+
+        const assistantId = store.appendAssistantMessage();
+
+        let buffer = "";
+        let rafId: number | null = null;
+
+        const streamState: ActiveStream = {
+            assistantId,
+            rafId,
+            buffer,
+            stop: null,
+        };
+
+        streamsRef.current.set(conversationId, streamState);
+
+        const flush = (targetId: string) => {
+            const current = streamsRef.current.get(targetId);
+            const state = useChatStore.getState();
+
+            if (!current) return;
+            if (!current.buffer) return;
+
+            // If we've navigated to a new ID, we should still flush to the assistantId we created
+            state.appendToken(assistantId, current.buffer);
+            current.buffer = "";
+        };
+
+        const startFrameLoop = (targetId: string) => {
+            const loop = () => {
+                const current = streamsRef.current.get(targetId);
+                if (!current || !streamsRef.current.has(targetId)) return;
+
+                flush(targetId);
+
+                current.rafId = requestAnimationFrame(loop);
+            };
+
+            const current = streamsRef.current.get(targetId);
+            if (!current) return;
+
+            current.rafId = requestAnimationFrame(loop);
+        };
+
+        const stopStream = (targetId: string) => {
+            const current = streamsRef.current.get(targetId);
+            if (!current) return;
+
+            if (current.stop) {
+                current.stop();
+                current.stop = null;
+            }
+
+            if (current.rafId) {
+                cancelAnimationFrame(current.rafId);
+                current.rafId = null;
+            }
+
+            const state = useChatStore.getState();
+
+            if (current.buffer) {
+                state.appendToken(assistantId, current.buffer);
+                current.buffer = "";
+            }
+
+            state.finalizeMessage();
+
+            streamsRef.current.delete(targetId);
+        };
+
         try {
-          await persistMutation.mutateAsync(payload);
+            const { promise, stop } = streamMessage(
+                { conversationId, content, model },
+                (token: string) => {
+                    const current = streamsRef.current.get(conversationId);
+                    if (!current) return;
+
+                    current.buffer += token;
+
+                    if (!current.rafId) {
+                        startFrameLoop(conversationId);
+                    }
+                },
+                {
+                    onCreated: ({ conversationId: newId }) => {
+                        // Refresh history immediately
+                        invalidateConversations();
+
+                        if (isNew && newId) {
+                            // Update UI highlight only (prevents MessageList re-render)
+                            useChatStore.getState().setUiActiveId(newId);
+
+                            // Update URL without triggering React Router re-render
+                            window.history.replaceState(
+                                null,
+                                "",
+                                `/app/chat/${newId}`,
+                            );
+                        }
+                    },
+                },
+            );
+
+            streamState.stop = stop;
+            const result = await promise;
+
+            // Finalize navigation and store state after stream finishes
+            if (isNew && result.conversationId) {
+                // Sync stream state to new ID
+                streamsRef.current.set(result.conversationId, streamState);
+                streamsRef.current.delete("new");
+
+                // Update store and trigger formal navigation (no-op since URL is already set)
+                useChatStore
+                    .getState()
+                    .updateActiveConversationId(result.conversationId);
+                navigate(`/app/chat/${result.conversationId}`, {
+                    replace: true,
+                });
+            }
         } catch (error) {
-          console.error("Failed to persist partial message:", error);
+            const current = streamsRef.current.get(conversationId);
+
+            if (!current) return;
+
+            const message =
+                error instanceof Error ? error.message : "Streaming failed";
+
+            useChatStore
+                .getState()
+                .setMessageContent(
+                    assistantId,
+                    `Unable to get a response: ${message}`,
+                );
+        } finally {
+            stopStream(conversationId === "new" ? "new" : conversationId);
         }
-      }, 1000),
-    [persistMutation]
-  );
+    };
 
-  const startStreaming = async ({ conversationId, content }: StreamPayload) => {
-    const initialState = useChatStore.getState();
-    if (
-      initialState.activeConversationId !== conversationId ||
-      initialState.isStreaming
-    ) {
-      return;
-    }
+    const stopStreaming = (conversationId: string) => {
+        const stream = streamsRef.current.get(conversationId);
+        if (!stream) return;
 
-    initialState.appendUserMessage(content);
-
-    const userMessage = useChatStore.getState().messages.at(-1);
-    if (!userMessage) {
-      return;
-    }
-
-    const assistantId = useChatStore.getState().appendAssistantMessage();
-    const assistantCreatedAt = new Date().toISOString();
-    let assistantContent = "";
-    let isAborted = false;
-
-    try {
-      await streamMessage(
-        { conversationId, content },
-        (token) => {
-          if (isAborted) {
-            return;
-          }
-
-          const currentState = useChatStore.getState();
-          if (currentState.activeConversationId !== conversationId) {
-            return;
-          }
-
-          assistantContent += token;
-          currentState.appendToken(assistantId, token);
-
-          debouncedSave({
-            conversationId,
-            userMessage,
-            assistantMessage: {
-              id: assistantId,
-              role: "model",
-              content: assistantContent,
-              createdAt: assistantCreatedAt,
-            } as Message,
-          });
-        },
-        async () => {
-          if (isAborted) {
-            return;
-          }
-
-          const currentState = useChatStore.getState();
-          if (currentState.activeConversationId !== conversationId) {
-            currentState.finalizeMessage();
-            return;
-          }
-
-          currentState.finalizeMessage();
-
-          const assistantMessage: Message = {
-            id: assistantId,
-            role: "model",
-            content: assistantContent,
-            createdAt: assistantCreatedAt,
-          };
-
-          await persistMutation.mutateAsync({
-            conversationId,
-            userMessage,
-            assistantMessage,
-          });
+        if (stream.stop) {
+            stream.stop();
+            stream.stop = null;
         }
-      );
-    } catch (error) {
-      console.error("Streaming error:", error);
-      useChatStore.getState().finalizeMessage();
-    }
-  };
 
-  return {
-    startStreaming,
-  };
+        if (stream.rafId) {
+            cancelAnimationFrame(stream.rafId);
+            stream.rafId = null;
+        }
+
+        const state = useChatStore.getState();
+
+        if (stream.buffer && state.activeConversationId === conversationId) {
+            state.appendToken(stream.assistantId, stream.buffer);
+        }
+
+        state.finalizeMessage();
+
+        streamsRef.current.delete(conversationId);
+    };
+
+    return {
+        startStreaming,
+        stopStreaming,
+    };
 };

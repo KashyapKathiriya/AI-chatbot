@@ -1,8 +1,12 @@
 import { useAuth } from "@clerk/react";
 import { useEffect } from "react";
-import { setAuthTokenGetter } from "../shared/services/http";
+import { setAuthTokenGetter } from "../services/http";
 
-export default function AuthProvider({ children }: { children: React.ReactNode }) {
+export default function AuthProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { getToken, isLoaded } = useAuth();
 
   useEffect(() => {
