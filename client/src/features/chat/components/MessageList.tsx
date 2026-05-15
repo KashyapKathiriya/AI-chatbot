@@ -1,106 +1,331 @@
-import { useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
-import { useChatStore } from "../../../app/store/chatStore";
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  memo,
+  useState,
+  useLayoutEffect,
+} from "react";
+import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+
 import MessageItem from "./MessageItem";
-import { useMessages } from "../services/chatQueries";
 
-const MessageList = () => {
-  const { id: conversationId } = useParams();
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
+}
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const hydratedConversationRef = useRef<string | null>(null);
+const SUGGESTIONS = [
+  {
+    icon: Code,
+    title: "Review code",
+    desc: "Optimize and refactor your existing code",
+    prompt:
+      "Review the following code and suggest improvements for performance and readability:",
+  },
+  {
+    icon: PenTool,
+    title: "Draft an essay",
+    desc: "Write engaging and structured content",
+    prompt:
+      "Help me write an engaging introduction for a blog post about artificial intelligence.",
+  },
+  {
+    icon: Lightbulb,
+    title: "Brainstorm ideas",
+    desc: "Generate new and creative concepts",
+    prompt:
+      "Give me 5 unique project ideas for a hackathon focused on sustainability.",
+  },
+  {
+    icon: Terminal,
+    title: "Debug an error",
+    desc: "Fix tricky bugs and understand errors",
+    prompt: "I'm getting an error in my code. How do I fix it?",
+  },
+];
 
-  const messages = useChatStore((state) => state.messages);
-  const activeConversationId = useChatStore((state) => state.activeConversationId);
+interface MessageListProps {
+  messages: Message[];
+  loading: boolean;
+  messagesLoading: boolean;
+  messagesError: string | null;
+  hasLoadedCurrentChat: boolean;
+  isStreaming: boolean;
+  currentChatId: string | null;
+  isNewChat: boolean;
+  onSuggestionClick?: (text: string) => void;
+}
 
-  const isStreaming = useChatStore((state) => state.isStreaming);
-  const streamingId = useChatStore((state) => state.streamingId);
-  const stopRequested = useChatStore((state) => state.stopRequested);
+const MessageList = ({
+  messages,
+  loading,
+  messagesLoading,
+  messagesError,
+  hasLoadedCurrentChat,
+  isStreaming,
+  currentChatId,
+  isNewChat,
+  onSuggestionClick,
+}: MessageListProps) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const setActiveConversation = useChatStore((state) => state.setActiveConversation);
-  const setMessages = useChatStore((state) => state.setMessages);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
-  const { data: fetchedMessages = [], isLoading } =
-    useMessages(conversationId);
+  // Track if user manually scrolled up
+  const shouldAutoScrollRef = useRef(true);
 
-  /**
-   * Set active conversation ONLY
-   */
+  // Track previous values
+  const prevChatIdRef = useRef<string | null>(null);
+  const prevMessageCountRef = useRef(0);
+
+  // GET REAL SCROLL CONTAINER
+
+  const getScrollContainer = useCallback(() => {
+    return scrollContainerRef.current?.closest(
+      ".overflow-y-auto",
+    ) as HTMLDivElement | null;
+  }, []);
+
+  // CHECK IF USER IS NEAR BOTTOM
+
+  const isAtBottom = useCallback(() => {
+    const container = getScrollContainer();
+
+    if (!container) return true;
+
+    return (
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      120
+    );
+  }, [getScrollContainer]);
+
+  // SCROLL TO BOTTOM
+  const scrollToBottom = useCallback(
+    (smooth = false) => {
+      const container = getScrollContainer();
+
+      if (!container) return;
+
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    },
+    [getScrollContainer],
+  );
+
+  // HANDLE SCROLL
+
+  const handleScroll = useCallback(() => {
+    const atBottom = isAtBottom();
+
+    shouldAutoScrollRef.current = atBottom;
+
+    setShowScrollToBottom(!atBottom);
+  }, [isAtBottom]);
+
+  // ATTACH SCROLL LISTENER
   useEffect(() => {
-    // Prevent clearing messages if the store ID already matches the URL ID
-    if (activeConversationId === (conversationId ?? null)) {
-      return;
-    }
+    const container = getScrollContainer();
 
-    hydratedConversationRef.current = null;
-    setActiveConversation(conversationId ?? null);
-  }, [conversationId, setActiveConversation, activeConversationId]);
+    if (!container) return;
 
-  /**
-   * Hydration (safe against streaming race conditions)
-   */
-  useEffect(() => {
+    container.addEventListener("scroll", handleScroll);
+
+    // Initial check
+    handleScroll();
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [getScrollContainer, handleScroll]);
+
+  // AUTO SCROLL ON:
+  // 1. NEW MESSAGE
+  // 2. CHAT SWITCH
+  // 3. PAGE REFRESH
+  useLayoutEffect(() => {
+    const messageCountChanged = messages.length !== prevMessageCountRef.current;
+
+    const chatChanged = currentChatId !== prevChatIdRef.current;
+
+    // Always scroll when:
+    // - opening another chat
+    // - refreshing/loading chat
+    // - sending new message while already at bottom
     if (
-      !conversationId ||
-      isLoading ||
-      activeConversationId !== conversationId ||
-      hydratedConversationRef.current === conversationId ||
-      streamingId
+      chatChanged ||
+      (!messagesLoading && shouldAutoScrollRef.current && messageCountChanged)
     ) {
-      return;
+      requestAnimationFrame(() => {
+        scrollToBottom(false);
+      });
     }
 
-    setMessages(fetchedMessages);
-    hydratedConversationRef.current = conversationId;
+    prevMessageCountRef.current = messages.length;
+    prevChatIdRef.current = currentChatId;
+  }, [messages, currentChatId, messagesLoading, scrollToBottom]);
+
+  // FORCE SCROLL AFTER CHAT LOAD
+  useEffect(() => {
+    if (hasLoadedCurrentChat && messages.length > 0 && !messagesLoading) {
+      const timeout = setTimeout(() => {
+        scrollToBottom(false);
+      }, 50);
+
+      return () => clearTimeout(timeout);
+    }
   }, [
-    activeConversationId,
-    conversationId,
-    fetchedMessages,
-    isLoading,
-    setMessages,
-    streamingId,
+    hasLoadedCurrentChat,
+    currentChatId,
+    messages.length,
+    messagesLoading,
+    scrollToBottom,
   ]);
 
-  /**
-   * Scroll management (stop + streaming safe)
-   */
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({
-        behavior: isStreaming || stopRequested ? "auto" : "smooth",
-      });
-    });
-
-    return () => cancelAnimationFrame(id);
-  }, [messages, isStreaming, stopRequested]);
-
-  if (!conversationId) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-neutral-400">
-        Select a conversation
-      </div>
-    );
-  }
-
-  if (isLoading && messages.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-neutral-400">
-        Loading messages...
-      </div>
-    );
-  }
+  const showSuggestions = !currentChatId && messages.length === 0;
 
   return (
-    <div className="flex-1 overflow-y-auto flex justify-center w-full bg-[#212121]">
-      <div className="max-w-4xl w-full px-4 md:px-6 space-y-4">
-        {messages.map((msg) => (
-          <MessageItem key={msg.id} message={msg} />
-        ))}
+    <div
+      ref={scrollContainerRef}
+      className={`px-4 py-8 md:px-10 [overflow-anchor:none] ${
+        showSuggestions ? "scrollbar-hide" : ""
+      }`}
+    >
+      <div className="mx-auto flex max-w-5xl flex-col gap-8">
+        {showSuggestions ? (
+          <div className="flex w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-12 duration-700 md:py-24">
+            <div className="mb-12 flex flex-col items-center text-center">
+              <div className="mb-7 flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="Velora Logo"
+                  className="h-20 w-20 object-contain object-center drop-shadow-lg"
+                />
+              </div>
 
-        <div ref={bottomRef} className="h-1" />
+              <h2 className="mb-3 font-display text-[1.85rem] font-bold tracking-tight text-white md:text-[2rem]">
+                How can I help you today?
+              </h2>
+
+              <p className="max-w-md text-base leading-relaxed tracking-[0.01em] text-slate-500">
+                {isNewChat
+                  ? "Your new conversation is ready. Choose a suggestion below or send a message to get started."
+                  : "Select an existing chat from the sidebar or start a new one to begin brainstorming or asking questions."}
+              </p>
+            </div>
+
+            <div className="grid w-full max-w-3xl grid-cols-1 gap-3.5 sm:grid-cols-2">
+              {SUGGESTIONS.map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onSuggestionClick?.(suggestion.prompt)}
+                  className="group flex flex-col items-start rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 text-left transition-all duration-300 hover:border-white/15 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-indigo-500/[0.03]"
+                >
+                  <div className="mb-3 flex items-center gap-3 text-slate-400 transition-colors duration-300 group-hover:text-indigo-400">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/60 transition-all duration-300 group-hover:bg-indigo-500/[0.12] group-hover:shadow-sm group-hover:shadow-indigo-500/20">
+                      <suggestion.icon size={18} strokeWidth={1.8} />
+                    </div>
+
+                    <span className="text-base font-semibold tracking-tight text-slate-200">
+                      {suggestion.title}
+                    </span>
+                  </div>
+
+                  <p className="pl-12 text-sm leading-relaxed text-slate-500 transition-colors duration-300 group-hover:text-slate-400">
+                    {suggestion.desc}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : messagesError && currentChatId && messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <p className="text-base font-semibold tracking-tight text-slate-200">
+              Unable to load messages
+            </p>
+            <p className="mt-2.5 max-w-md text-sm leading-relaxed text-slate-500">
+              {messagesError}
+            </p>
+          </div>
+        ) : (messagesLoading || (currentChatId && !hasLoadedCurrentChat)) &&
+          messages.length === 0 ? (
+          <div className="flex w-full animate-in fade-in justify-start duration-300">
+            <div className="flex max-w-[85%] flex-row gap-3">
+              <div className="flex shrink-0 items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="Velora Logo"
+                  className="h-7 w-7 animate-pulse object-contain"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+              </div>
+            </div>
+          </div>
+        ) : messages.length === 0 && !loading && !isStreaming ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <p className="text-base tracking-wide text-slate-500">No messages yet. The stage is yours.</p>
+          </div>
+        ) : (
+          <>
+            {messages.map((msg, i) => (
+              <div key={msg.id}>
+                <MessageItem
+                  message={msg}
+                  isStreaming={isStreaming && i === messages.length - 1}
+                />
+              </div>
+            ))}
+
+            {isStreaming &&
+              messages.length > 0 &&
+              messages[messages.length - 1].role === "user" && (
+                <div className="flex w-full justify-start duration-300">
+                  <div className="flex items-center gap-3 py-6">
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse [animation-delay:100ms]" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse [animation-delay:200ms]" />
+                  </div>
+                </div>
+              )}
+
+            {/* SCROLL TO BOTTOM BUTTON */}
+            {showScrollToBottom && messages.length > 0 && (
+              <div className="pointer-events-none sticky bottom-10 z-20 flex justify-center animate-in fade-in slide-in-from-bottom-3 duration-300">
+                <button
+                  type="button"
+                  onClick={() => {
+                    shouldAutoScrollRef.current = true;
+                    scrollToBottom(true);
+                  }}
+                  aria-label="Scroll to bottom"
+                  className="pointer-events-auto flex h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 px-3 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
+                >
+                  {isStreaming ? (
+                    <div className="flex items-center gap-1">
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse [animation-delay:100ms]" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse [animation-delay:200ms]" />
+                    </div>
+                  ) : (
+                    <ChevronDown size={20} />
+                  )}
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
 };
 
-export default MessageList;
+export default memo(MessageList);
